@@ -9,7 +9,6 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.TextView;
 import java.util.HashMap;
-import java.util.List;
 
 public class ScannerService extends AccessibilityService {
     private WindowManager windowManager;
@@ -21,21 +20,17 @@ public class ScannerService extends AccessibilityService {
     public void onAccessibilityEvent(AccessibilityEvent event) {
         AccessibilityNodeInfo nodeInfo = getRootInActiveWindow();
         if (nodeInfo == null) return;
-
-        // স্ক্রিনের সব টেক্সট চেক করা
         findBrailleNodes(nodeInfo);
     }
 
     private void findBrailleNodes(AccessibilityNodeInfo node) {
         if (node == null) return;
-
         if (node.getText() != null) {
             String text = node.getText().toString();
             if (isBraille(text)) {
                 decodedView.setText("ডিকোড: " + decodeBraille(text));
             }
         }
-
         for (int i = 0; i < node.getChildCount(); i++) {
             findBrailleNodes(node.getChild(i));
         }
@@ -52,9 +47,10 @@ public class ScannerService extends AccessibilityService {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         overlayView = LayoutInflater.from(this).inflate(R.layout.floating_layout, null);
 
+        // এখানে Capital letter-এর ভুলটা ঠিক করা হয়েছে
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.match_parent,
-                WindowManager.LayoutParams.wrap_content,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT);
@@ -66,9 +62,28 @@ public class ScannerService extends AccessibilityService {
 
     private void initMap() {
         reverseMap = new HashMap<>();
-        // (এখানে আগের সেই সব ব্রেইল টু বাংলা ম্যাপগুলো থাকবে যা পার্ট-৩ এ দিয়েছিলাম)
-        reverseMap.put('⠁', 'a'); reverseMap.put('⡀', 'অ'); // উদাহরণ হিসেবে কয়েকটা দিলাম
-        // ... (বাকি ম্যাপগুলো এখানে আগের কোড থেকে বসিয়ে নিন)
+        reverseMap.put('⠁', 'a'); reverseMap.put('⠃', 'b'); reverseMap.put('⠉', 'c'); reverseMap.put('⠙', 'd');
+        reverseMap.put('⠑', 'e'); reverseMap.put('⠋', 'f'); reverseMap.put('⠛', 'g'); reverseMap.put('⠓', 'h');
+        reverseMap.put('⠊', 'i'); reverseMap.put('⠚', 'j'); reverseMap.put('⠅', 'k'); reverseMap.put('⠇', 'l');
+        reverseMap.put('⠍', 'm'); reverseMap.put('⠝', 'n'); reverseMap.put('⠕', 'o'); reverseMap.put('⠏', 'p');
+        reverseMap.put('⠟', 'q'); reverseMap.put('⠗', 'r'); reverseMap.put('⠎', 's'); reverseMap.put('⠞', 't');
+        reverseMap.put('⠥', 'u'); reverseMap.put('⠧', 'v'); reverseMap.put('⠺', 'w'); reverseMap.put('⠭', 'x');
+        reverseMap.put('⠽', 'y'); reverseMap.put('⠵', 'z');
+        reverseMap.put('⡀', 'অ'); reverseMap.put('⡁', 'আ'); reverseMap.put('⡂', 'ই'); reverseMap.put('⡃', 'ঈ');
+        reverseMap.put('⡄', 'উ'); reverseMap.put('⡅', 'ঊ'); reverseMap.put('⡆', 'ঋ'); reverseMap.put('⡇', 'এ');
+        reverseMap.put('⡈', 'ঐ'); reverseMap.put('⡉', 'ও'); reverseMap.put('⡊', 'ঔ');
+        reverseMap.put('⡋', 'ক'); reverseMap.put('⡌', 'খ'); reverseMap.put('⡍', 'গ'); reverseMap.put('⡎', 'ঘ');
+        reverseMap.put('⡏', 'ঙ'); reverseMap.put('⡐', 'চ'); reverseMap.put('⡑', 'ছ'); reverseMap.put('⡒', 'জ');
+        reverseMap.put('⡓', 'ঝ'); reverseMap.put('⡔', 'ঞ'); reverseMap.put('⡕', 'ট'); reverseMap.put('⡖', 'ঠ');
+        reverseMap.put('⡗', 'ড'); reverseMap.put('⡘', 'ঢ'); reverseMap.put('⡙', 'ণ'); reverseMap.put('⡚', 'ত');
+        reverseMap.put('⡛', 'থ'); reverseMap.put('⡜', 'দ'); reverseMap.put('⡝', 'ধ'); reverseMap.put('⡞', 'ন');
+        reverseMap.put('⡟', 'প'); reverseMap.put('⡠', 'ফ'); reverseMap.put('⡡', 'ব'); reverseMap.put('⡢', 'ভ');
+        reverseMap.put('⡣', 'ম'); reverseMap.put('⡤', 'য'); reverseMap.put('⡥', 'র'); reverseMap.put('⡦', 'ল');
+        reverseMap.put('⡧', 'শ'); reverseMap.put('⡨', 'ষ'); reverseMap.put('⡩', 'স'); reverseMap.put('⡪', 'হ');
+        reverseMap.put('⡯', 'া'); reverseMap.put('⡰', 'ি'); reverseMap.put('⡱', 'ী'); reverseMap.put('⡲', 'ু');
+        reverseMap.put('⡳', 'ূ'); reverseMap.put('⡴', 'ৃ'); reverseMap.put('⡵', 'ে'); reverseMap.put('⡶', 'ৈ');
+        reverseMap.put('⡷', 'ো'); reverseMap.put('⡸', 'ৌ'); reverseMap.put('⡼', '্'); reverseMap.put('⡽', '।');
+        reverseMap.put(' ', ' ');
     }
 
     private String decodeBraille(String text) {
