@@ -15,6 +15,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Auto-Fix XML Errors (Hacker Script)
+        run: |
+          mkdir -p app/src/main/res/values
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">Gateway Magic</string></resources>' > app/src/main/res/values/strings.xml
+          sed -i 's/android:description="[^"]*"/android:description="@string\/app_name"/g' app/src/main/res/xml/accessibility_service_config.xml || true
+
       - name: Setup Proper Engine
         uses: gradle/actions/setup-gradle@v3
         with:
