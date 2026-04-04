@@ -10,12 +10,14 @@ import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.EditText;
 import android.widget.TextView;
 import java.util.HashMap;
+import java.util.List;
 
 public class ScannerService extends AccessibilityService {
     private WindowManager windowManager;
@@ -34,7 +36,7 @@ public class ScannerService extends AccessibilityService {
         overlayView = LayoutInflater.from(this).inflate(R.layout.floating_layout, null);
 
         params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT, // শুরুতে শুধু ডটের সমান জায়গা নেবে
+                WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -77,8 +79,8 @@ public class ScannerService extends AccessibilityService {
         overlayView.findViewById(R.id.btn_back_from_kb).setOnClickListener(v -> showMenu());
 
         overlayView.findViewById(R.id.btn_resize_glass).setOnClickListener(v -> {
-            var lp = glassScannerLayout.getLayoutParams();
-            if (lp.width == 300 * 3) { // Toggle Logic
+            ViewGroup.LayoutParams lp = glassScannerLayout.getLayoutParams();
+            if (lp.width == 300 * 3) {
                 lp.width = 300; lp.height = 200;
             } else {
                 lp.width = WindowManager.LayoutParams.MATCH_PARENT;
