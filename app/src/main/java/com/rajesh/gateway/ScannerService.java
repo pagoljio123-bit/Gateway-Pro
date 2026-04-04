@@ -26,15 +26,16 @@ import java.util.List;
 
 public class ScannerService extends AccessibilityService {
     private WindowManager windowManager;
-    private View controlView;
+    private View controlView, triggerView;
     private FrameLayout lensView;
-    private WindowManager.LayoutParams params, lensParams;
+    private WindowManager.LayoutParams params, lensParams, triggerParams;
     
     private View stealthBar, menuLayout, keyboardLayout;
     private View btnLensOn, btnLensOff;
     private EditText magicInput;
     
     private boolean isLensActive = false;
+    private long lastTapTime = 0;
     private HashMap<Character, Character> bToT = new HashMap<>(), tToB = new HashMap<>();
     private Handler uiHandler = new Handler(Looper.getMainLooper());
 
@@ -51,6 +52,7 @@ public class ScannerService extends AccessibilityService {
         initMaps();
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
+        // ১. কন্ট্রোল ভিউ
         controlView = LayoutInflater.from(this).inflate(R.layout.floating_layout, null);
         params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
@@ -60,6 +62,17 @@ public class ScannerService extends AccessibilityService {
         params.gravity = Gravity.TOP | Gravity.START;
         windowManager.addView(controlView, params);
 
+        // ২. ডাবল ট্যাপ ট্রিগার (স্ক্রিনের কোণায়)
+        triggerView = new View(this);
+        triggerParams = new WindowManager.LayoutParams(
+                50, 50,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT);
+        triggerParams.gravity = Gravity.TOP | Gravity.END;
+        windowManager.addView(triggerView, triggerParams);
+
+        // ৩. লেন্স ভিউ
         lensView = new FrameLayout(this);
         lensParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
@@ -79,7 +92,7 @@ public class ScannerService extends AccessibilityService {
         btnLensOff = controlView.findViewById(R.id.btn_lens_off);
         magicInput = controlView.findViewById(R.id.magic_input);
 
-        // ১. ইউনিভার্সাল ড্র্যাগিং লজিক (যেকোনো জায়গায় টাচ করে মুভমেন্ট)
+        // ড্র্যাগিং মুভমেন্ট
         View.OnTouchListener universalDrag = new View.OnTouchListener() {
             private int initialX, initialY;
             private float initialTouchX, initialTouchY;
@@ -98,11 +111,19 @@ public class ScannerService extends AccessibilityService {
             }
         };
 
-        // ড্র্যাগিং অ্যাপ্লাই করা
         controlView.setOnTouchListener(universalDrag);
         stealthBar.setOnClickListener(v -> showMenu());
 
-        // ২. কিবোর্ড ফিক্স ও অটো-ক্লিয়ার
+        // ডাবল ট্যাপ ম্যাজিক
+        triggerView.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - lastTapTime < 300) { showMenu(); }
+                lastTapTime = currentTime;
+            }
+            return true;
+        });
+
         controlView.findViewById(R.id.btn_keyboard).setOnClickListener(v -> {
             menuLayout.setVisibility(View.GONE);
             keyboardLayout.setVisibility(View.VISIBLE);
@@ -110,18 +131,16 @@ public class ScannerService extends AccessibilityService {
             windowManager.updateViewLayout(controlView, params);
         });
 
+        // অটো সেন্ড এবং ক্লিয়ার
         controlView.findViewById(R.id.btn_send_clear).setOnClickListener(v -> {
             String encodedCode = encode(magicInput.getText().toString());
             new Thread(() -> {
                 if (sendToWhatsAppAndClick(encodedCode)) {
-                    uiHandler.post(() -> {
-                        magicInput.setText(""); // ভার্চুয়াল কিবোর্ড ক্লিয়ার
-                    });
+                    uiHandler.post(() -> magicInput.setText(""));
                 }
             }).start();
         });
 
-        // ৩. নেভিগেশন লজিক
         controlView.findViewById(R.id.btn_back_to_bar).setOnClickListener(v -> hideToBar());
         controlView.findViewById(R.id.btn_close_kb).setOnClickListener(v -> hideToBar());
         controlView.findViewById(R.id.btn_lens_on).setOnClickListener(v -> {
@@ -130,39 +149,43 @@ public class ScannerService extends AccessibilityService {
         });
         controlView.findViewById(R.id.btn_lens_off).setOnClickListener(v -> stopLens());
         controlView.findViewById(R.id.btn_exit).setOnClickListener(v -> {
-            windowManager.removeView(controlView); windowManager.removeView(lensView); stopSelf();
+            windowManager.removeView(controlView); windowManager.removeView(lensView); windowManager.removeView(triggerView); stopSelf();
         });
 
         magicInput.addTextChangedListener(new TextWatcher() {
-            public void onTextChanged(CharSequence s, int st, int b, int c) {
-                injectOnly(encode(s.toString()));
-            }
+            public void onTextChanged(CharSequence s, int st, int b, int c) { injectOnly(encode(s.toString())); }
             public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
             public void afterTextChanged(Editable s) {}
         });
     }
 
     private void showMenu() { stealthBar.setVisibility(View.GONE); menuLayout.setVisibility(View.VISIBLE); }
+    
     private void hideToBar() {
         menuLayout.setVisibility(View.GONE); keyboardLayout.setVisibility(View.GONE);
         stealthBar.setVisibility(View.VISIBLE);
         params.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
         windowManager.updateViewLayout(controlView, params);
     }
+    
     private void stopLens() { isLensActive = false; lensView.removeAllViews(); btnLensOff.setVisibility(View.GONE); btnLensOn.setVisibility(View.VISIBLE); }
 
-    // হোয়াটসঅ্যাপে কোড পাঠানো, সেন্ড বাটনে ক্লিক করা এবং ক্লিয়ার করা
+    // এই মেইন ইঞ্জিনটাই ভুল করে মুছে গিয়েছিল, এখন ১০০% ঠিক আছে!
+    @Override
+    public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (!isLensActive) return;
+        uiHandler.removeCallbacks(scanRunnable);
+        uiHandler.postDelayed(scanRunnable, 300); 
+    }
+
     private boolean sendToWhatsAppAndClick(String t) {
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) return false;
-        
         AccessibilityNodeInfo edit = findEditable(root);
         if (edit != null) {
             Bundle args = new Bundle();
             args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t);
             edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
-            
-            // সেন্ড বাটন খুঁজে ক্লিক করা
             try { Thread.sleep(100); } catch (Exception e) {}
             clickWhatsAppSend(root);
             return true;
@@ -183,12 +206,10 @@ public class ScannerService extends AccessibilityService {
     }
 
     private void clickWhatsAppSend(AccessibilityNodeInfo root) {
-        // হোয়াটসঅ্যাপের সেন্ড বাটন সাধারণত 'Send' ডিসক্রিপশন বা নির্দিষ্ট আইডি দিয়ে থাকে
         List<AccessibilityNodeInfo> sendButtons = root.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send");
         if (sendButtons != null && !sendButtons.isEmpty()) {
             sendButtons.get(0).performAction(AccessibilityNodeInfo.ACTION_CLICK);
         } else {
-            // আইডি না পেলে কন্টেন্ট ডেসক্রিপশন দিয়ে খোঁজা
             searchAndClickSend(root);
         }
     }
@@ -211,7 +232,6 @@ public class ScannerService extends AccessibilityService {
         } return null;
     }
 
-    // স্ক্যানারের আগের ১০০% নিখুঁত কোড
     private void scanAndDrawNodes(AccessibilityNodeInfo node) {
         if (node == null) return;
         String viewId = node.getViewIdResourceName();
