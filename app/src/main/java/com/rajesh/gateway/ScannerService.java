@@ -17,7 +17,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.view.accessibility.AccessibilityWindowInfo; // একদম সঠিক ঠিকানা
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -27,19 +26,18 @@ import java.util.List;
 
 public class ScannerService extends AccessibilityService {
     private WindowManager windowManager;
-    private View controlView, triggerView;
+    private View controlView;
     private FrameLayout lensView;
-    private WindowManager.LayoutParams controlParams, lensParams, triggerParams;
+    private WindowManager.LayoutParams params, lensParams;
     
     private View stealthBar, menuLayout, keyboardLayout;
     private View btnLensOn, btnLensOff;
     private EditText magicInput;
     
     private boolean isLensActive = false;
-    private long lastTapTime = 0;
     private HashMap<Character, Character> bToT = new HashMap<>(), tToB = new HashMap<>();
-    
     private Handler uiHandler = new Handler(Looper.getMainLooper());
+
     private Runnable scanRunnable = () -> {
         if (!isLensActive) return;
         lensView.removeAllViews();
@@ -53,27 +51,15 @@ public class ScannerService extends AccessibilityService {
         initMaps();
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-        // ১. কন্ট্রোল ভিউ (স্টিলথ বার ও মেনু)
         controlView = LayoutInflater.from(this).inflate(R.layout.floating_layout, null);
-        controlParams = new WindowManager.LayoutParams(
+        params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT);
-        controlParams.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
-        windowManager.addView(controlView, controlParams);
+        params.gravity = Gravity.TOP | Gravity.START;
+        windowManager.addView(controlView, params);
 
-        // ২. অদৃশ্য ট্রিগার বিন্দু (ডাবল ট্যাপের জন্য)
-        triggerView = new View(this);
-        triggerParams = new WindowManager.LayoutParams(
-                50, 50,
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                PixelFormat.TRANSLUCENT);
-        triggerParams.gravity = Gravity.TOP | Gravity.END;
-        windowManager.addView(triggerView, triggerParams);
-
-        // ৩. লেন্স পর্দা
         lensView = new FrameLayout(this);
         lensParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
@@ -82,10 +68,10 @@ public class ScannerService extends AccessibilityService {
                 PixelFormat.TRANSLUCENT);
         windowManager.addView(lensView, lensParams);
 
-        setupSmartLogic();
+        setupStealthUI();
     }
 
-    private void setupSmartLogic() {
+    private void setupStealthUI() {
         stealthBar = controlView.findViewById(R.id.stealth_bar);
         menuLayout = controlView.findViewById(R.id.menu_layout);
         keyboardLayout = controlView.findViewById(R.id.keyboard_layout);
@@ -93,146 +79,165 @@ public class ScannerService extends AccessibilityService {
         btnLensOff = controlView.findViewById(R.id.btn_lens_off);
         magicInput = controlView.findViewById(R.id.magic_input);
 
-        // ড্র্যাগিং লজিক (বার সরানো)
-        stealthBar.setOnTouchListener(new View.OnTouchListener() {
-            private int initialX, initialY; private float initialTouchX, initialTouchY;
+        // ১. ইউনিভার্সাল ড্র্যাগিং লজিক (যেকোনো জায়গায় টাচ করে মুভমেন্ট)
+        View.OnTouchListener universalDrag = new View.OnTouchListener() {
+            private int initialX, initialY;
+            private float initialTouchX, initialTouchY;
             @Override public boolean onTouch(View v, MotionEvent event) {
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
-                        initialX = controlParams.x; initialY = controlParams.y;
+                        initialX = params.x; initialY = params.y;
                         initialTouchX = event.getRawX(); initialTouchY = event.getRawY();
                         return true;
                     case MotionEvent.ACTION_MOVE:
-                        controlParams.x = initialX + (int) (event.getRawX() - initialTouchX);
-                        controlParams.y = initialY + (int) (event.getRawY() - initialTouchY);
-                        windowManager.updateViewLayout(controlView, controlParams);
-                        return true;
-                    case MotionEvent.ACTION_UP:
-                        if (Math.abs(event.getRawX() - initialTouchX) < 5) showMenu();
+                        params.x = initialX + (int) (event.getRawX() - initialTouchX);
+                        params.y = initialY + (int) (event.getRawY() - initialTouchY);
+                        windowManager.updateViewLayout(controlView, params);
                         return true;
                 } return false;
             }
-        });
+        };
 
-        // ডাবল ট্যাপ ম্যাজিক (অদৃশ্য বিন্দুর ওপর)
-        triggerView.setOnTouchListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                long currentTime = System.currentTimeMillis();
-                if (currentTime - lastTapTime < 300) { // ৩০০ মিলিসেকেন্ডের মধ্যে দুবার টাচ
-                    showMenu();
-                }
-                lastTapTime = currentTime;
-            }
-            return true;
-        });
+        // ড্র্যাগিং অ্যাপ্লাই করা
+        controlView.setOnTouchListener(universalDrag);
+        stealthBar.setOnClickListener(v -> showMenu());
 
-        // এখানে btn_full_hide ঠিক করা হয়েছে
-        controlView.findViewById(R.id.btn_full_hide).setOnClickListener(v -> {
-            menuLayout.setVisibility(View.GONE);
-            stealthBar.setVisibility(View.GONE); // পুরোপুরি অদৃশ্য
-        });
-
+        // ২. কিবোর্ড ফিক্স ও অটো-ক্লিয়ার
         controlView.findViewById(R.id.btn_keyboard).setOnClickListener(v -> {
             menuLayout.setVisibility(View.GONE);
             keyboardLayout.setVisibility(View.VISIBLE);
-            controlParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
-            windowManager.updateViewLayout(controlView, controlParams);
+            params.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+            windowManager.updateViewLayout(controlView, params);
         });
 
+        controlView.findViewById(R.id.btn_send_clear).setOnClickListener(v -> {
+            String encodedCode = encode(magicInput.getText().toString());
+            new Thread(() -> {
+                if (sendToWhatsAppAndClick(encodedCode)) {
+                    uiHandler.post(() -> {
+                        magicInput.setText(""); // ভার্চুয়াল কিবোর্ড ক্লিয়ার
+                    });
+                }
+            }).start();
+        });
+
+        // ৩. নেভিগেশন লজিক
+        controlView.findViewById(R.id.btn_back_to_bar).setOnClickListener(v -> hideToBar());
+        controlView.findViewById(R.id.btn_close_kb).setOnClickListener(v -> hideToBar());
         controlView.findViewById(R.id.btn_lens_on).setOnClickListener(v -> {
             isLensActive = true; btnLensOn.setVisibility(View.GONE); btnLensOff.setVisibility(View.VISIBLE);
             uiHandler.post(scanRunnable);
         });
-
         controlView.findViewById(R.id.btn_lens_off).setOnClickListener(v -> stopLens());
-        controlView.findViewById(R.id.btn_close_kb).setOnClickListener(v -> closeKeyboard());
-        
         controlView.findViewById(R.id.btn_exit).setOnClickListener(v -> {
-            windowManager.removeView(controlView); windowManager.removeView(lensView); windowManager.removeView(triggerView); stopSelf();
+            windowManager.removeView(controlView); windowManager.removeView(lensView); stopSelf();
         });
 
         magicInput.addTextChangedListener(new TextWatcher() {
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                final String code = encode(s.toString());
-                new Thread(() -> injectIntoWhatsApp(code)).start();
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+                injectOnly(encode(s.toString()));
             }
             public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
             public void afterTextChanged(Editable s) {}
         });
     }
 
-    private void showMenu() {
-        stealthBar.setVisibility(View.GONE);
-        menuLayout.setVisibility(View.VISIBLE);
+    private void showMenu() { stealthBar.setVisibility(View.GONE); menuLayout.setVisibility(View.VISIBLE); }
+    private void hideToBar() {
+        menuLayout.setVisibility(View.GONE); keyboardLayout.setVisibility(View.GONE);
+        stealthBar.setVisibility(View.VISIBLE);
+        params.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        windowManager.updateViewLayout(controlView, params);
     }
-
     private void stopLens() { isLensActive = false; lensView.removeAllViews(); btnLensOff.setVisibility(View.GONE); btnLensOn.setVisibility(View.VISIBLE); }
 
-    private void closeKeyboard() {
-        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null) imm.hideSoftInputFromWindow(magicInput.getWindowToken(), 0);
-        keyboardLayout.setVisibility(View.GONE); stealthBar.setVisibility(View.VISIBLE);
-        controlParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
-        windowManager.updateViewLayout(controlView, controlParams);
+    // হোয়াটসঅ্যাপে কোড পাঠানো, সেন্ড বাটনে ক্লিক করা এবং ক্লিয়ার করা
+    private boolean sendToWhatsAppAndClick(String t) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        
+        AccessibilityNodeInfo edit = findEditable(root);
+        if (edit != null) {
+            Bundle args = new Bundle();
+            args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t);
+            edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+            
+            // সেন্ড বাটন খুঁজে ক্লিক করা
+            try { Thread.sleep(100); } catch (Exception e) {}
+            clickWhatsAppSend(root);
+            return true;
+        }
+        return false;
     }
 
-    @Override
-    public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (!isLensActive) return;
-        uiHandler.removeCallbacks(scanRunnable);
-        uiHandler.postDelayed(scanRunnable, 300); 
+    private void injectOnly(String t) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root != null) {
+            AccessibilityNodeInfo edit = findEditable(root);
+            if (edit != null) {
+                Bundle args = new Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t);
+                edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+            }
+        }
     }
 
+    private void clickWhatsAppSend(AccessibilityNodeInfo root) {
+        // হোয়াটসঅ্যাপের সেন্ড বাটন সাধারণত 'Send' ডিসক্রিপশন বা নির্দিষ্ট আইডি দিয়ে থাকে
+        List<AccessibilityNodeInfo> sendButtons = root.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send");
+        if (sendButtons != null && !sendButtons.isEmpty()) {
+            sendButtons.get(0).performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        } else {
+            // আইডি না পেলে কন্টেন্ট ডেসক্রিপশন দিয়ে খোঁজা
+            searchAndClickSend(root);
+        }
+    }
+
+    private void searchAndClickSend(AccessibilityNodeInfo node) {
+        if (node == null) return;
+        if (node.getClassName() != null && node.getClassName().toString().contains("ImageView") && node.isClickable()) {
+            if (node.getContentDescription() != null && node.getContentDescription().toString().equalsIgnoreCase("Send")) {
+                node.performAction(AccessibilityNodeInfo.ACTION_CLICK); return;
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) searchAndClickSend(node.getChild(i));
+    }
+
+    private AccessibilityNodeInfo findEditable(AccessibilityNodeInfo n) {
+        if (n == null) return null;
+        if (n.isEditable() && n.getClassName().toString().contains("EditText")) return n;
+        for (int i = 0; i < n.getChildCount(); i++) {
+            AccessibilityNodeInfo c = findEditable(n.getChild(i)); if (c != null) return c;
+        } return null;
+    }
+
+    // স্ক্যানারের আগের ১০০% নিখুঁত কোড
     private void scanAndDrawNodes(AccessibilityNodeInfo node) {
         if (node == null) return;
         String viewId = node.getViewIdResourceName();
         if (viewId != null && (viewId.contains("quoted") || viewId.contains("reply"))) return;
         if (node.getText() != null && isBraille(node.getText().toString())) {
             Rect b = new Rect(); node.getBoundsInScreen(b);
-            int screenWidth = getResources().getDisplayMetrics().widthPixels;
-            drawDecodedText(decode(node.getText().toString()), b, b.centerX() < (screenWidth / 2));
+            int sw = getResources().getDisplayMetrics().widthPixels;
+            drawDecoded(decode(node.getText().toString()), b, b.centerX() < (sw / 2));
         }
         for (int i = 0; i < node.getChildCount(); i++) scanAndDrawNodes(node.getChild(i));
     }
 
-    private boolean isBraille(String text) {
-        if (text == null || text.trim().isEmpty()) return false;
-        for (char c : text.toCharArray()) if (c >= '\u2800' && c <= '\u28FF') return true;
+    private boolean isBraille(String t) {
+        if (t == null || t.trim().isEmpty()) return false;
+        for (char c : t.toCharArray()) if (c >= '\u2800' && c <= '\u28FF') return true;
         return false;
     }
 
-    private void drawDecodedText(String text, Rect b, boolean isP) {
+    private void drawDecoded(String t, Rect b, boolean isP) {
         int[] pos = new int[2]; lensView.getLocationOnScreen(pos);
-        TextView tv = new TextView(this); tv.setText(text); tv.setTextSize(14); tv.setGravity(Gravity.CENTER);
+        TextView tv = new TextView(this); tv.setText(t); tv.setTextSize(14); tv.setGravity(Gravity.CENTER);
         tv.setBackgroundColor(isP ? Color.parseColor("#F2FFFFFF") : Color.parseColor("#E60055FF"));
         tv.setTextColor(isP ? Color.BLACK : Color.WHITE);
         FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(b.width(), b.height());
         p.leftMargin = b.left - pos[0]; p.topMargin = b.top - pos[1];
         lensView.addView(tv, p);
-    }
-
-    private void injectIntoWhatsApp(String t) {
-        List<AccessibilityWindowInfo> wins = getWindows(); if (wins == null) return;
-        for (AccessibilityWindowInfo w : wins) {
-            if (w.getType() == AccessibilityWindowInfo.TYPE_APPLICATION) {
-                AccessibilityNodeInfo r = w.getRoot();
-                if (r != null && r.getPackageName() != null && r.getPackageName().toString().contains("whatsapp")) {
-                    AccessibilityNodeInfo edit = findEdit(r);
-                    if (edit != null) {
-                        Bundle args = new Bundle(); args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t);
-                        edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args); return;
-                    }
-                }
-            }
-        }
-    }
-
-    private AccessibilityNodeInfo findEdit(AccessibilityNodeInfo n) {
-        if (n == null) return null;
-        if (n.isEditable() && n.getClassName() != null && n.getClassName().toString().endsWith("EditText")) return n;
-        for (int i = 0; i < n.getChildCount(); i++) {
-            AccessibilityNodeInfo c = findEdit(n.getChild(i)); if (c != null) return c;
-        } return null;
     }
 
     private void initMaps() {
