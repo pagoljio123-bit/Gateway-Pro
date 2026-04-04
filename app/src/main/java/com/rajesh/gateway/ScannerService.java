@@ -21,6 +21,7 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 import java.util.HashMap;
+import java.util.List;
 
 public class ScannerService extends AccessibilityService {
     private WindowManager windowManager;
@@ -54,7 +55,7 @@ public class ScannerService extends AccessibilityService {
         initMaps();
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-        // ১. কন্ট্রোলার উইন্ডো
+        // কন্ট্রোলার উইন্ডো
         controlView = LayoutInflater.from(this).inflate(R.layout.floating_layout, null);
         controlParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -65,13 +66,13 @@ public class ScannerService extends AccessibilityService {
         controlParams.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
         windowManager.addView(controlView, controlParams);
 
-        // ২. লেন্স উইন্ডো (স্ট্যাটাস বারের ঝামেলা এড়াতে FLAG_LAYOUT_NO_LIMITS ব্যবহার করা হলো)
+        // লেন্স উইন্ডো
         lensView = new FrameLayout(this);
         lensParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT);
         windowManager.addView(lensView, lensParams);
 
@@ -91,10 +92,7 @@ public class ScannerService extends AccessibilityService {
             menuLayout.setVisibility(View.VISIBLE);
         });
 
-        controlView.findViewById(R.id.btn_hide).setOnClickListener(v -> {
-            menuLayout.setVisibility(View.GONE);
-            dotIcon.setVisibility(View.VISIBLE);
-        });
+        controlView.findViewById(R.id.btn_hide).setOnClickListener(v -> hideMenus());
 
         controlView.findViewById(R.id.btn_exit).setOnClickListener(v -> {
             windowManager.removeView(controlView);
@@ -116,19 +114,24 @@ public class ScannerService extends AccessibilityService {
             keyboardLayout.setVisibility(View.VISIBLE);
             controlParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
             windowManager.updateViewLayout(controlView, controlParams);
+            magicInput.requestFocus();
         });
 
         controlView.findViewById(R.id.btn_close_kb).setOnClickListener(v -> closeKeyboard());
 
-        // অটো টাইপিং (ব্যাকগ্রাউন্ড থ্রেডে, যাতে ফোন হ্যাং না হয়)
+        // হ্যাং ফিক্স: Thread সরানো হয়েছে, সরাসরি মেইন থ্রেড থেকে হোয়াটসঅ্যাপে ইনজেক্ট হবে
         magicInput.addTextChangedListener(new TextWatcher() {
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-                final String code = encode(s.toString());
-                new Thread(() -> injectIntoWhatsApp(code)).start();
+                injectIntoWhatsApp(encode(s.toString()));
             }
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             public void afterTextChanged(Editable s) {}
         });
+    }
+
+    private void hideMenus() {
+        menuLayout.setVisibility(View.GONE);
+        dotIcon.setVisibility(View.VISIBLE);
     }
 
     private void stopLens() {
@@ -139,14 +142,21 @@ public class ScannerService extends AccessibilityService {
     }
 
     private void closeKeyboard() {
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(magicInput.getWindowToken(), 0);
+        
+        keyboardLayout.setVisibility(View.GONE);
+        dotIcon.setVisibility(View.VISIBLE);
+        controlParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        windowManager.updateViewLayout(controlView, controlParams);
+    }
+
+    // হোয়াটসঅ্যাপ থেকে বেরোলেই সব হাইড হয়ে যাবে
+    private void hideEverything() {
         uiHandler.post(() -> {
-            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (imm != null) imm.hideSoftInputFromWindow(magicInput.getWindowToken(), 0);
-            
-            keyboardLayout.setVisibility(View.GONE);
-            dotIcon.setVisibility(View.VISIBLE);
-            controlParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
-            windowManager.updateViewLayout(controlView, controlParams);
+            if (keyboardLayout.getVisibility() == View.VISIBLE) closeKeyboard();
+            if (isLensActive) stopLens();
+            hideMenus();
         });
     }
 
@@ -155,8 +165,7 @@ public class ScannerService extends AccessibilityService {
         if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             CharSequence pkg = event.getPackageName();
             if (pkg != null && !pkg.toString().contains("whatsapp")) {
-                if (keyboardLayout.getVisibility() == View.VISIBLE) closeKeyboard();
-                if (isLensActive) stopLens();
+                hideEverything();
             }
         }
         if (!isLensActive) return;
@@ -168,7 +177,6 @@ public class ScannerService extends AccessibilityService {
     private void scanAndDrawNodes(AccessibilityNodeInfo node) {
         if (node == null) return;
         
-        // ট্যাগ করা (Quoted/Reply) মেসেজগুলো এড়িয়ে যাওয়া
         String viewId = node.getViewIdResourceName();
         if (viewId != null && (viewId.contains("quoted") || viewId.contains("reply"))) return;
 
@@ -179,7 +187,6 @@ public class ScannerService extends AccessibilityService {
                 node.getBoundsInScreen(bounds);
                 
                 int screenWidth = getResources().getDisplayMetrics().widthPixels;
-                // মেসেজ বাঁ-দিকে থাকলে પ્રિયાঙ্কা, ডানদিকে থাকলে আপনি
                 boolean isPriyanka = (bounds.centerX() < (screenWidth / 2));
 
                 drawDecodedText(decode(text), bounds, isPriyanka);
@@ -190,48 +197,49 @@ public class ScannerService extends AccessibilityService {
         }
     }
 
-    // আল্ট্রা ব্রেইল স্ক্যানার: যেকোনো ব্রেইল ক্যারেক্টার দেখলেই চিনে নেবে
     private boolean isBraille(String text) {
         if (text == null || text.trim().isEmpty()) return false;
         for (char c : text.toCharArray()) {
-            if (c >= '\u2800' && c <= '\u28FF') {
-                return true;
-            }
+            if (c >= '\u2800' && c <= '\u28FF') return true;
         }
         return false;
     }
 
+    // পারফেক্ট অ্যালাইনমেন্ট ফর্মুলা (কোডের একদম ওপরে বসবে)
     private void drawDecodedText(String text, Rect bounds, boolean isPriyanka) {
+        // স্ক্রিনের পজিশন মেপে স্ট্যাটাস বারের উচ্চতা বাদ দেওয়া হলো
+        int[] screenPos = new int[2];
+        lensView.getLocationOnScreen(screenPos);
+        int adjustedY = bounds.top - screenPos[1];
+        int adjustedX = bounds.left - screenPos[0];
+
         TextView textView = new TextView(this);
         textView.setText(text);
         textView.setTextSize(14);
         textView.setTypeface(null, android.graphics.Typeface.BOLD);
-        // লেখাগুলো একদম মেসেজের মাঝখানে (Center) দেখাবে
         textView.setGravity(Gravity.CENTER); 
         textView.setPadding(10, 5, 10, 5);
         
         if (isPriyanka) {
-            // প্রিয়াঙ্কার মেসেজ: সাদা ব্যাকগ্রাউন্ড, কালো লেখা
-            textView.setBackgroundColor(Color.parseColor("#F2FFFFFF")); // 95% Opaque White
+            textView.setBackgroundColor(Color.parseColor("#F2FFFFFF")); 
             textView.setTextColor(Color.BLACK);
         } else {
-            // আপনার মেসেজ: নীল ব্যাকগ্রাউন্ড, সাদা লেখা
-            textView.setBackgroundColor(Color.parseColor("#E60055FF")); // 90% Opaque Blue
+            textView.setBackgroundColor(Color.parseColor("#E60055FF")); 
             textView.setTextColor(Color.WHITE);
         }
 
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(bounds.width(), bounds.height());
-        params.leftMargin = bounds.left;
-        params.topMargin = bounds.top;
+        params.leftMargin = adjustedX;
+        params.topMargin = adjustedY;
         lensView.addView(textView, params);
     }
 
-    // হোয়াটসঅ্যাপে টাইপিং বক্স অটোমেটিক খোঁজার স্মার্ট মেথড
+    // হোয়াটসঅ্যাপে টাইপিংয়ের ১০০% ওয়ার্কিং ইনজেক্টর
     private void injectIntoWhatsApp(String text) {
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) return;
         
-        AccessibilityNodeInfo editableNode = findEditableNode(root);
+        AccessibilityNodeInfo editableNode = findMessageNode(root);
         if (editableNode != null) {
             Bundle arguments = new Bundle();
             arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
@@ -239,11 +247,12 @@ public class ScannerService extends AccessibilityService {
         }
     }
 
-    private AccessibilityNodeInfo findEditableNode(AccessibilityNodeInfo node) {
+    private AccessibilityNodeInfo findMessageNode(AccessibilityNodeInfo node) {
         if (node == null) return null;
         if (node.isEditable()) return node;
+        if (node.getViewIdResourceName() != null && node.getViewIdResourceName().endsWith("id/entry")) return node;
         for (int i = 0; i < node.getChildCount(); i++) {
-            AccessibilityNodeInfo child = findEditableNode(node.getChild(i));
+            AccessibilityNodeInfo child = findMessageNode(node.getChild(i));
             if (child != null) return child;
         }
         return null;
