@@ -19,12 +19,11 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 import java.util.HashMap;
-import java.util.List;
 
 public class ScannerService extends AccessibilityService {
     private WindowManager windowManager;
     private View controlView;
-    private FrameLayout lensView; // অদৃশ্য পর্দা
+    private FrameLayout lensView;
     private WindowManager.LayoutParams controlParams, lensParams;
     
     private View dotIcon, menuLayout, keyboardLayout;
@@ -34,13 +33,12 @@ public class ScannerService extends AccessibilityService {
     private boolean isLensActive = false;
     private HashMap<Character, Character> tToB = new HashMap<>(), bToT = new HashMap<>();
     
-    // হ্যাং রোধ করার জন্য Debounce Handler
     private Handler handler = new Handler(Looper.getMainLooper());
     private Runnable scanRunnable = new Runnable() {
         @Override
         public void run() {
             if (!isLensActive) return;
-            lensView.removeAllViews(); // পুরনো লেখা মুছে ফেলা
+            lensView.removeAllViews();
             AccessibilityNodeInfo root = getRootInActiveWindow();
             if (root != null) {
                 scanAndDrawNodes(root);
@@ -54,7 +52,6 @@ public class ScannerService extends AccessibilityService {
         initMaps();
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-        // ১. কন্ট্রোল উইন্ডো (ডট এবং কিবোর্ড)
         controlView = LayoutInflater.from(this).inflate(R.layout.floating_layout, null);
         controlParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -65,13 +62,12 @@ public class ScannerService extends AccessibilityService {
         controlParams.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
         windowManager.addView(controlView, controlParams);
 
-        // ২. লেন্স উইন্ডো (গুগল লেন্সের মতো অদৃশ্য পর্দা)
         lensView = new FrameLayout(this);
         lensParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE, // টাচ পাস হবে
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
                 PixelFormat.TRANSLUCENT);
         windowManager.addView(lensView, lensParams);
 
@@ -96,19 +92,17 @@ public class ScannerService extends AccessibilityService {
             dotIcon.setVisibility(View.VISIBLE);
         });
 
-        // ইমার্জেন্সি এক্সিট (যেকোনো সমস্যায় অ্যাপ বন্ধ করে দেবে)
         controlView.findViewById(R.id.btn_exit).setOnClickListener(v -> {
             windowManager.removeView(controlView);
             windowManager.removeView(lensView);
             stopSelf();
         });
 
-        // লেন্স অন/অফ
         btnLensOn.setOnClickListener(v -> {
             isLensActive = true;
             btnLensOn.setVisibility(View.GONE);
             btnLensOff.setVisibility(View.VISIBLE);
-            handler.post(scanRunnable); // স্ক্যান শুরু
+            handler.post(scanRunnable);
         });
 
         btnLensOff.setOnClickListener(v -> {
@@ -118,22 +112,20 @@ public class ScannerService extends AccessibilityService {
             btnLensOn.setVisibility(View.VISIBLE);
         });
 
-        // কিবোর্ড
         controlView.findViewById(R.id.btn_keyboard).setOnClickListener(v -> {
             menuLayout.setVisibility(View.GONE);
             keyboardLayout.setVisibility(View.VISIBLE);
-            controlParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE; // টাইপিং অন
+            controlParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
             windowManager.updateViewLayout(controlView, controlParams);
         });
 
         controlView.findViewById(R.id.btn_close_kb).setOnClickListener(v -> {
             keyboardLayout.setVisibility(View.GONE);
             dotIcon.setVisibility(View.VISIBLE);
-            controlParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE; // টাইপিং অফ
+            controlParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
             windowManager.updateViewLayout(controlView, controlParams);
         });
 
-        // অটো টাইপিং (হোয়াটসঅ্যাপে ইনজেকশন)
         magicInput.addTextChangedListener(new TextWatcher() {
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 injectIntoWhatsApp(encode(s.toString()));
@@ -146,7 +138,6 @@ public class ScannerService extends AccessibilityService {
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (!isLensActive) return;
-        // হ্যাং রোধ করার ব্রহ্মাস্ত্র: বারবার স্ক্যান না করে, আধা সেকেন্ড পর একবার স্ক্যান করবে
         handler.removeCallbacks(scanRunnable);
         handler.postDelayed(scanRunnable, 500); 
     }
@@ -160,7 +151,6 @@ public class ScannerService extends AccessibilityService {
                 node.getBoundsInScreen(bounds);
                 
                 int screenWidth = getResources().getDisplayMetrics().widthPixels;
-                // যদি মেসেজ স্ক্রিনের বাঁ-দিকে থাকে (প্রিয়াঙ্কা), ডানদিকে থাকলে (রাজেশ)
                 boolean isPriyanka = (bounds.left < (screenWidth / 3));
 
                 drawDecodedText(decode(text), bounds, isPriyanka);
@@ -171,6 +161,11 @@ public class ScannerService extends AccessibilityService {
         }
     }
 
+    // এই মেথডটা আমি আগেরবার দিতে ভুলে গিয়েছিলাম, এখন অ্যাড করে দিয়েছি
+    private boolean isBraille(String text) {
+        return text.contains("⠁") || text.contains("⡋") || text.contains("⡀");
+    }
+
     private void drawDecodedText(String text, Rect bounds, boolean isPriyanka) {
         TextView textView = new TextView(this);
         textView.setText(text);
@@ -179,11 +174,9 @@ public class ScannerService extends AccessibilityService {
         textView.setPadding(15, 10, 15, 10);
         
         if (isPriyanka) {
-            // প্রিয়াঙ্কার মেসেজ: সবুজ ব্যাকগ্রাউন্ড, সাদা লেখা
             textView.setBackgroundColor(Color.parseColor("#CC25D366")); 
             textView.setTextColor(Color.WHITE);
         } else {
-            // আপনার মেসেজ: কালো ব্যাকগ্রাউন্ড, সবুজ লেখা
             textView.setBackgroundColor(Color.parseColor("#CC000000"));
             textView.setTextColor(Color.parseColor("#00ffcc"));
         }
