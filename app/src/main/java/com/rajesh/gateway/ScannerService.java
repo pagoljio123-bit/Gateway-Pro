@@ -9,9 +9,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.LayoutInflater;
-import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -23,14 +21,10 @@ public class ScannerService extends AccessibilityService {
     private WindowManager windowManager;
     private View overlayView;
     private WindowManager.LayoutParams params;
-
     private View dotIcon, menuLayout, glassScannerLayout, keyboardLayout;
     private TextView glassDecodedText;
     private EditText magicInput;
-    private boolean isFullScreenGlass = false;
-
-    private HashMap<Character, Character> brailleToTextMap;
-    private HashMap<Character, Character> textToBrailleMap;
+    private HashMap<Character, Character> tToB = new HashMap<>(), bToT = new HashMap<>();
 
     @Override
     protected void onServiceConnected() {
@@ -40,18 +34,18 @@ public class ScannerService extends AccessibilityService {
         overlayView = LayoutInflater.from(this).inflate(R.layout.floating_layout, null);
 
         params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.WRAP_CONTENT, // শুরুতে শুধু ডটের সমান জায়গা নেবে
+                WindowManager.LayoutParams.WRAP_CONTENT,
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT);
-        params.gravity = Gravity.TOP | Gravity.START;
+        params.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
         windowManager.addView(overlayView, params);
 
-        setupUI();
+        setupLogic();
     }
 
-    private void setupUI() {
+    private void setupLogic() {
         dotIcon = overlayView.findViewById(R.id.dot_icon);
         menuLayout = overlayView.findViewById(R.id.menu_layout);
         glassScannerLayout = overlayView.findViewById(R.id.glass_scanner_layout);
@@ -59,94 +53,72 @@ public class ScannerService extends AccessibilityService {
         glassDecodedText = overlayView.findViewById(R.id.glass_decoded_text);
         magicInput = overlayView.findViewById(R.id.magic_input);
 
-        // Dot Click
-        dotIcon.setOnClickListener(v -> {
-            menuLayout.setVisibility(View.VISIBLE);
-            dotIcon.setVisibility(View.GONE);
-        });
+        dotIcon.setOnClickListener(v -> showMenu());
 
-        // Menu: Glass Scanner
         overlayView.findViewById(R.id.btn_glass_scanner).setOnClickListener(v -> {
             menuLayout.setVisibility(View.GONE);
             glassScannerLayout.setVisibility(View.VISIBLE);
-            setFocusable(false);
+            updateWindowSize(true, false);
         });
 
-        // Menu: Auto Keyboard
         overlayView.findViewById(R.id.btn_auto_keyboard).setOnClickListener(v -> {
             menuLayout.setVisibility(View.GONE);
             keyboardLayout.setVisibility(View.VISIBLE);
-            setFocusable(true); // Allow typing
+            updateWindowSize(true, true);
         });
 
-        // Exit
+        overlayView.findViewById(R.id.btn_hide).setOnClickListener(v -> {
+            menuLayout.setVisibility(View.GONE);
+            dotIcon.setVisibility(View.VISIBLE);
+            updateWindowSize(false, false);
+        });
+
+        overlayView.findViewById(R.id.btn_back_from_glass).setOnClickListener(v -> showMenu());
+        overlayView.findViewById(R.id.btn_back_from_kb).setOnClickListener(v -> showMenu());
+
+        overlayView.findViewById(R.id.btn_resize_glass).setOnClickListener(v -> {
+            var lp = glassScannerLayout.getLayoutParams();
+            if (lp.width == 300 * 3) { // Toggle Logic
+                lp.width = 300; lp.height = 200;
+            } else {
+                lp.width = WindowManager.LayoutParams.MATCH_PARENT;
+                lp.height = WindowManager.LayoutParams.MATCH_PARENT;
+            }
+            glassScannerLayout.setLayoutParams(lp);
+        });
+
         overlayView.findViewById(R.id.btn_exit).setOnClickListener(v -> {
-            if (overlayView != null) windowManager.removeView(overlayView);
+            windowManager.removeView(overlayView);
             stopSelf();
         });
 
-        // Close Glass
-        overlayView.findViewById(R.id.btn_close_glass).setOnClickListener(v -> {
-            glassScannerLayout.setVisibility(View.GONE);
-            dotIcon.setVisibility(View.VISIBLE);
-        });
-
-        // Resize Glass (Toggle Full Screen)
-        overlayView.findViewById(R.id.btn_resize_glass).setOnClickListener(v -> {
-            ViewGroup.LayoutParams layoutParams = glassScannerLayout.getLayoutParams();
-            if (isFullScreenGlass) {
-                layoutParams.width = 800; layoutParams.height = 600; // Small Crop
-            } else {
-                layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
-                layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT;
-            }
-            isFullScreenGlass = !isFullScreenGlass;
-            glassScannerLayout.setLayoutParams(layoutParams);
-        });
-
-        // Drag Glass
-        glassScannerLayout.setOnTouchListener(new View.OnTouchListener() {
-            private float dX, dY;
-            @Override
-            public boolean onTouch(View view, MotionEvent event) {
-                if (isFullScreenGlass) return false;
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        dX = view.getX() - event.getRawX();
-                        dY = view.getY() - event.getRawY();
-                        break;
-                    case MotionEvent.ACTION_MOVE:
-                        view.animate().x(event.getRawX() + dX).y(event.getRawY() + dY).setDuration(0).start();
-                        break;
-                }
-                return true;
-            }
-        });
-
-        // Close Keyboard
-        overlayView.findViewById(R.id.btn_close_keyboard).setOnClickListener(v -> {
-            keyboardLayout.setVisibility(View.GONE);
-            dotIcon.setVisibility(View.VISIBLE);
-            setFocusable(false);
-        });
-
-        // Auto Type Logic
         magicInput.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                String brailleCode = encodeToBraille(s.toString());
-                injectIntoWhatsApp(brailleCode);
-            }
-            @Override public void afterTextChanged(Editable s) {}
+            public void onTextChanged(CharSequence s, int st, int b, int c) { inject(encode(s.toString())); }
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+            public void afterTextChanged(Editable s) {}
         });
     }
 
-    private void setFocusable(boolean focusable) {
-        if (focusable) {
-            params.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
+    private void showMenu() {
+        dotIcon.setVisibility(View.GONE);
+        glassScannerLayout.setVisibility(View.GONE);
+        keyboardLayout.setVisibility(View.GONE);
+        menuLayout.setVisibility(View.VISIBLE);
+        updateWindowSize(true, false);
+    }
+
+    private void updateWindowSize(boolean fullScreen, boolean focusable) {
+        if (fullScreen) {
+            params.width = WindowManager.LayoutParams.MATCH_PARENT;
+            params.height = WindowManager.LayoutParams.MATCH_PARENT;
         } else {
-            params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
+            params.width = WindowManager.LayoutParams.WRAP_CONTENT;
+            params.height = WindowManager.LayoutParams.WRAP_CONTENT;
         }
+        
+        if (focusable) params.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        else params.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        
         windowManager.updateViewLayout(overlayView, params);
     }
 
@@ -154,82 +126,36 @@ public class ScannerService extends AccessibilityService {
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (glassScannerLayout.getVisibility() == View.VISIBLE) {
             AccessibilityNodeInfo root = getRootInActiveWindow();
-            if (root != null) scanNodesUnderGlass(root);
+            if (root != null) scan(root);
         }
     }
 
-    private void scanNodesUnderGlass(AccessibilityNodeInfo node) {
+    private void scan(AccessibilityNodeInfo node) {
         if (node == null) return;
-        if (node.getText() != null && isBraille(node.getText().toString())) {
-            Rect nodeRect = new Rect();
-            node.getBoundsInScreen(nodeRect);
-            
-            int[] glassLocation = new int[2];
-            glassScannerLayout.getLocationOnScreen(glassLocation);
-            Rect glassRect = new Rect(glassLocation[0], glassLocation[1],
-                    glassLocation[0] + glassScannerLayout.getWidth(),
-                    glassLocation[1] + glassScannerLayout.getHeight());
-
-            if (Rect.intersects(glassRect, nodeRect)) {
-                glassDecodedText.setText("Decoded: " + decodeBraille(node.getText().toString()));
-            }
+        if (node.getText() != null && node.getText().toString().contains("⠁")) {
+            Rect r = new Rect(); node.getBoundsInScreen(r);
+            Rect glass = new Rect(); glassScannerLayout.getGlobalVisibleRect(glass);
+            if (Rect.intersects(glass, r)) glassDecodedText.setText(decode(node.getText().toString()));
         }
-        for (int i = 0; i < node.getChildCount(); i++) {
-            scanNodesUnderGlass(node.getChild(i));
-        }
+        for (int i = 0; i < node.getChildCount(); i++) scan(node.getChild(i));
     }
 
-    private void injectIntoWhatsApp(String text) {
+    private void inject(String t) {
         AccessibilityNodeInfo root = getRootInActiveWindow();
-        AccessibilityNodeInfo inputBox = findEditText(root);
-        if (inputBox != null) {
-            Bundle arguments = new Bundle();
-            arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
-            inputBox.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments);
+        if (root == null) return;
+        List<AccessibilityNodeInfo> list = root.findAccessibilityNodeInfosByViewId("com.whatsapp:id/entry");
+        if (!list.isEmpty()) {
+            Bundle b = new Bundle(); b.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t);
+            list.get(0).performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, b);
         }
-    }
-
-    private AccessibilityNodeInfo findEditText(AccessibilityNodeInfo node) {
-        if (node == null) return null;
-        if (node.getClassName() != null && node.getClassName().toString().equals("android.widget.EditText")) {
-            return node;
-        }
-        for (int i = 0; i < node.getChildCount(); i++) {
-            AccessibilityNodeInfo child = findEditText(node.getChild(i));
-            if (child != null) return child;
-        }
-        return null;
-    }
-
-    private boolean isBraille(String text) {
-        return text.contains("⠁") || text.contains("⡋") || text.contains("⡀");
     }
 
     private void initMaps() {
-        brailleToTextMap = new HashMap<>();
-        textToBrailleMap = new HashMap<>();
-        
-        // English & Bengali mappings
-        String[] normal = {"a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z", "অ","আ","ই","ঈ","উ","ঊ","ঋ","এ","ঐ","ও","ঔ","ক","খ","গ","ঘ","ঙ","চ","ছ","জ","ঝ","ঞ","ট","ঠ","ড","ঢ","ণ","ত","থ","দ","ধ","ন","প","ফ","ব","ভ","ম","য","র","ল","শ","ষ","স","হ","া","ি","ী","ু","ূ","ৃ","ে","ৈ","ো","ৌ","্","।"," "};
-        String[] braille = {"⠁","⠃","⠉","⠙","⠑","⠋","⠛","⠓","⠊","⠚","⠅","⠇","⠍","⠝","⠕","⠏","⠟","⠗","⠎","⠞","⠥","⠧","⠺","⠭","⠽","⠵", "⡀","⡁","⡂","⡃","⡄","⡅","⡆","⡇","⡈","⡉","⡊","⡋","⡌","⡍","⡎","⡏","⡐","⡑","⡒","⡓","⡔","⡕","⡖","⡗","⡘","⡙","⡚","⡛","⡜","⡝","⡞","⡟","⡠","⡡","⡢","⡣","⡤","⡥","⡦","⡧","⡨","⡩","⡪","⡯","⡰","⡱","⡲","⡳","⡴","⡵","⡶","⡷","⡸","⡼","⡽"," "};
-
-        for (int i = 0; i < normal.length; i++) {
-            brailleToTextMap.put(braille[i].charAt(0), normal[i].charAt(0));
-            textToBrailleMap.put(normal[i].charAt(0), braille[i].charAt(0));
-        }
+        String[] n = {"a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","অ","আ","ই","ঈ","উ","ঊ","ঋ","এ","ঐ","ও","ঔ","ক","খ","গ","ঘ","ঙ","চ","ছ","জ","ঝ","ঞ","ট","ঠ","ড","ঢ","ণ","ত","থ","দ","ধ","ন","প","ফ","ব","ভ","ম","য","র","ল","শ","ষ","স","হ","া","ি","ী","ু","ূ","ৃ","ে","ৈ","ো","ৌ","্","।"," "};
+        String[] b = {"⠁","⠃","⠉","⠙","⠑","⠋","⠛","⠓","⠊","⠚","⠅","⠇","⠍","⠝","⠕","⠏","⠟","⠗","⠎","⠞","⠥","⠧","⠺","⠭","⠽","⠵","⡀","⡁","⡂","⡃","⡄","⡅","⡆","⡇","⡈","⡉","⡊","⡋","⡌","⡍","⡎","⡏","⡐","⡑","⡒","⡓","⡔","⡕","⡖","⡗","⡘","⡙","⡚","⡛","⡜","⡝","⡞","⡟","⡠","⡡","⡢","⡣","⡤","⡥","⡗","⡧","⡨","⡩","⡪","⡯","⡰","⡱","⡲","⡳","⡴","⡵","⡶","⡷","⡸","⡼","⡽"," "};
+        for(int i=0; i<n.length; i++) { tToB.put(n[i].charAt(0), b[i].charAt(0)); bToT.put(b[i].charAt(0), n[i].charAt(0)); }
     }
-
-    private String decodeBraille(String text) {
-        StringBuilder res = new StringBuilder();
-        for (char c : text.toCharArray()) res.append(brailleToTextMap.containsKey(c) ? brailleToTextMap.get(c) : c);
-        return res.toString();
-    }
-
-    private String encodeToBraille(String text) {
-        StringBuilder res = new StringBuilder();
-        for (char c : text.toLowerCase().toCharArray()) res.append(textToBrailleMap.containsKey(c) ? textToBrailleMap.get(c) : c);
-        return res.toString();
-    }
-
-    @Override public void onInterrupt() {}
+    private String decode(String s) { StringBuilder r=new StringBuilder(); for(char c:s.toCharArray()) r.append(bToT.getOrDefault(c,c)); return r.toString(); }
+    private String encode(String s) { StringBuilder r=new StringBuilder(); for(char c:s.toLowerCase().toCharArray()) r.append(tToB.getOrDefault(c,c)); return r.toString(); }
+    public void onInterrupt() {}
 }
