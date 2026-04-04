@@ -8,7 +8,7 @@
 
     <View
         android:id="@+id/stealth_bar"
-        android:layout_width="6dp"
+        android:layout_width="8dp"
         android:layout_height="50dp"
         android:background="#15FFFFFF" 
         android:elevation="1dp" />
@@ -36,11 +36,7 @@
         android:background="#15000000"
         android:padding="12dp"
         android:visibility="gone">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-            <Button android:id="@+id/btn_close_kb" android:layout_width="wrap_content" android:layout_height="32dp" android:text="Back" android:textSize="9sp" android:backgroundTint="#88555555" />
-            <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
-            <Button android:id="@+id/btn_send_clear" android:layout_width="wrap_content" android:layout_height="32dp" android:text="SEND &amp; CLEAR" android:textSize="9sp" android:backgroundTint="#8800ffcc" android:textColor="#000" android:textStyle="bold" />
-        </LinearLayout>
-        <EditText android:id="@+id/magic_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:hint="Type here..." android:textColor="#00ffcc" android:background="#22ffffff" android:padding="12dp" />
+        <Button android:id="@+id/btn_close_kb" android:layout_width="wrap_content" android:layout_height="32dp" android:text="Close Keyboard" android:textSize="9sp" android:backgroundTint="#88555555" />
+        <EditText android:id="@+id/magic_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:hint="Type here (Auto Code)..." android:textColor="#00ffcc" android:background="#22ffffff" android:padding="12dp" />
     </LinearLayout>
 </LinearLayout>
