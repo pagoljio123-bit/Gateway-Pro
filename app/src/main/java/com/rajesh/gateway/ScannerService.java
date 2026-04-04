@@ -1,7 +1,6 @@
 package com.rajesh.gateway;
 
 import android.accessibilityservice.AccessibilityService;
-import android.accessibilityservice.AccessibilityWindowInfo;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -17,6 +16,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo; // এখানে সঠিক ঠিকানা দেওয়া হয়েছে
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -67,7 +67,7 @@ public class ScannerService extends AccessibilityService {
         controlParams.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
         windowManager.addView(controlView, controlParams);
 
-        // লেন্স (অপরিবর্তিত, যেমনটা আপনার পছন্দ হয়েছিল)
+        // লেন্স 
         lensView = new FrameLayout(this);
         lensParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -127,7 +127,7 @@ public class ScannerService extends AccessibilityService {
         // কিবোর্ড ফিক্স: ক্লোজ লজিক
         controlView.findViewById(R.id.btn_close_kb).setOnClickListener(v -> closeKeyboard());
 
-        // হোয়াটসঅ্যাপে টাইপিং ফিক্স (ব্যাকগ্রাউন্ড থ্রেড)
+        // হোয়াটসঅ্যাপে টাইপিং ফিক্স 
         magicInput.addTextChangedListener(new TextWatcher() {
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 final String code = encode(s.toString());
@@ -182,8 +182,9 @@ public class ScannerService extends AccessibilityService {
 
     // হোয়াটসঅ্যাপ ইনজেকশনের স্পেশাল গ্লোবাল মেথড
     private void injectIntoWhatsApp(String text) {
-        // ফোনের সব উইন্ডো চেক করে হোয়াটসঅ্যাপের বক্স বের করবে
         List<AccessibilityWindowInfo> windows = getWindows();
+        if (windows == null) return;
+        
         for (AccessibilityWindowInfo window : windows) {
             if (window.getType() == AccessibilityWindowInfo.TYPE_APPLICATION) {
                 AccessibilityNodeInfo root = window.getRoot();
@@ -193,7 +194,7 @@ public class ScannerService extends AccessibilityService {
                         Bundle arguments = new Bundle();
                         arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
                         editableNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments);
-                        return; // কাজ শেষ
+                        return; 
                     }
                 }
             }
@@ -210,7 +211,6 @@ public class ScannerService extends AccessibilityService {
         return null;
     }
 
-    // স্ক্যানারের আগের ১০০% নিখুঁত কোড (কোনো পরিবর্তন নেই)
     private void scanAndDrawNodes(AccessibilityNodeInfo node) {
         if (node == null) return;
         
