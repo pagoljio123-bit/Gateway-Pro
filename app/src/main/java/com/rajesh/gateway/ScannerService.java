@@ -1,6 +1,7 @@
 package com.rajesh.gateway;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.AccessibilityWindowInfo;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -37,8 +38,9 @@ public class ScannerService extends AccessibilityService {
     private boolean isLensActive = false;
     private long lastTapTime = 0;
     private HashMap<Character, Character> bToT = new HashMap<>(), tToB = new HashMap<>();
+    
     private Handler uiHandler = new Handler(Looper.getMainLooper());
-
+    private Runnable typeRunnable;
     private Runnable scanRunnable = () -> {
         if (!isLensActive) return;
         lensView.removeAllViews();
@@ -52,7 +54,6 @@ public class ScannerService extends AccessibilityService {
         initMaps();
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-        // ১. কন্ট্রোল ভিউ
         controlView = LayoutInflater.from(this).inflate(R.layout.floating_layout, null);
         params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
@@ -62,7 +63,6 @@ public class ScannerService extends AccessibilityService {
         params.gravity = Gravity.TOP | Gravity.START;
         windowManager.addView(controlView, params);
 
-        // ২. ডাবল ট্যাপ ট্রিগার (স্ক্রিনের কোণায়)
         triggerView = new View(this);
         triggerParams = new WindowManager.LayoutParams(
                 50, 50,
@@ -72,7 +72,6 @@ public class ScannerService extends AccessibilityService {
         triggerParams.gravity = Gravity.TOP | Gravity.END;
         windowManager.addView(triggerView, triggerParams);
 
-        // ৩. লেন্স ভিউ
         lensView = new FrameLayout(this);
         lensParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
@@ -92,29 +91,34 @@ public class ScannerService extends AccessibilityService {
         btnLensOff = controlView.findViewById(R.id.btn_lens_off);
         magicInput = controlView.findViewById(R.id.magic_input);
 
-        // ড্র্যাগিং মুভমেন্ট
-        View.OnTouchListener universalDrag = new View.OnTouchListener() {
+        // ড্র্যাগিং ফিক্স: এখন যেখানে খুশি সরানো যাবে
+        stealthBar.setOnTouchListener(new View.OnTouchListener() {
             private int initialX, initialY;
             private float initialTouchX, initialTouchY;
+            private long touchStartTime;
+
             @Override public boolean onTouch(View v, MotionEvent event) {
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         initialX = params.x; initialY = params.y;
                         initialTouchX = event.getRawX(); initialTouchY = event.getRawY();
+                        touchStartTime = System.currentTimeMillis();
                         return true;
                     case MotionEvent.ACTION_MOVE:
                         params.x = initialX + (int) (event.getRawX() - initialTouchX);
                         params.y = initialY + (int) (event.getRawY() - initialTouchY);
                         windowManager.updateViewLayout(controlView, params);
                         return true;
+                    case MotionEvent.ACTION_UP:
+                        long touchDuration = System.currentTimeMillis() - touchStartTime;
+                        float distance = Math.abs(event.getRawX() - initialTouchX) + Math.abs(event.getRawY() - initialTouchY);
+                        // যদি হালকা টাচ হয়, তাহলে ক্লিক হিসেবে ধরবে
+                        if (touchDuration < 200 && distance < 10) showMenu();
+                        return true;
                 } return false;
             }
-        };
+        });
 
-        controlView.setOnTouchListener(universalDrag);
-        stealthBar.setOnClickListener(v -> showMenu());
-
-        // ডাবল ট্যাপ ম্যাজিক
         triggerView.setOnTouchListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
                 long currentTime = System.currentTimeMillis();
@@ -131,16 +135,6 @@ public class ScannerService extends AccessibilityService {
             windowManager.updateViewLayout(controlView, params);
         });
 
-        // অটো সেন্ড এবং ক্লিয়ার
-        controlView.findViewById(R.id.btn_send_clear).setOnClickListener(v -> {
-            String encodedCode = encode(magicInput.getText().toString());
-            new Thread(() -> {
-                if (sendToWhatsAppAndClick(encodedCode)) {
-                    uiHandler.post(() -> magicInput.setText(""));
-                }
-            }).start();
-        });
-
         controlView.findViewById(R.id.btn_back_to_bar).setOnClickListener(v -> hideToBar());
         controlView.findViewById(R.id.btn_close_kb).setOnClickListener(v -> hideToBar());
         controlView.findViewById(R.id.btn_lens_on).setOnClickListener(v -> {
@@ -152,8 +146,14 @@ public class ScannerService extends AccessibilityService {
             windowManager.removeView(controlView); windowManager.removeView(lensView); windowManager.removeView(triggerView); stopSelf();
         });
 
+        // হ্যাং ফিক্স: ডিবাইন্স সিস্টেম
         magicInput.addTextChangedListener(new TextWatcher() {
-            public void onTextChanged(CharSequence s, int st, int b, int c) { injectOnly(encode(s.toString())); }
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+                if (typeRunnable != null) uiHandler.removeCallbacks(typeRunnable);
+                final String code = encode(s.toString());
+                typeRunnable = () -> new Thread(() -> injectOnly(code)).start();
+                uiHandler.postDelayed(typeRunnable, 150); // 150ms পর পর সেন্ড করবে, তাই হ্যাং হবে না
+            }
             public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
             public void afterTextChanged(Editable s) {}
         });
@@ -170,58 +170,53 @@ public class ScannerService extends AccessibilityService {
     
     private void stopLens() { isLensActive = false; lensView.removeAllViews(); btnLensOff.setVisibility(View.GONE); btnLensOn.setVisibility(View.VISIBLE); }
 
-    // এই মেইন ইঞ্জিনটাই ভুল করে মুছে গিয়েছিল, এখন ১০০% ঠিক আছে!
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
+        // ম্যাজিক ক্লিয়ার: হোয়াটসঅ্যাপের সেন্ড বাটনে ক্লিক করলেই কিবোর্ড ফাঁকা হয়ে যাবে
+        if (event.getEventType() == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+            AccessibilityNodeInfo node = event.getSource();
+            if (node != null) {
+                String viewId = node.getViewIdResourceName();
+                CharSequence desc = node.getContentDescription();
+                if ((viewId != null && viewId.equals("com.whatsapp:id/send")) || 
+                    (desc != null && desc.toString().equalsIgnoreCase("Send"))) {
+                    uiHandler.post(() -> {
+                        if (magicInput != null) magicInput.setText("");
+                    });
+                }
+            }
+        }
+
+        if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            CharSequence pkg = event.getPackageName();
+            if (pkg != null && !pkg.toString().contains("whatsapp") && !pkg.toString().contains("gateway")) {
+                uiHandler.post(() -> {
+                    if (keyboardLayout.getVisibility() == View.VISIBLE) hideToBar();
+                });
+            }
+        }
+
         if (!isLensActive) return;
         uiHandler.removeCallbacks(scanRunnable);
         uiHandler.postDelayed(scanRunnable, 300); 
     }
 
-    private boolean sendToWhatsAppAndClick(String t) {
-        AccessibilityNodeInfo root = getRootInActiveWindow();
-        if (root == null) return false;
-        AccessibilityNodeInfo edit = findEditable(root);
-        if (edit != null) {
-            Bundle args = new Bundle();
-            args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t);
-            edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
-            try { Thread.sleep(100); } catch (Exception e) {}
-            clickWhatsAppSend(root);
-            return true;
-        }
-        return false;
-    }
-
     private void injectOnly(String t) {
-        AccessibilityNodeInfo root = getRootInActiveWindow();
-        if (root != null) {
-            AccessibilityNodeInfo edit = findEditable(root);
-            if (edit != null) {
-                Bundle args = new Bundle();
-                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t);
-                edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+        List<AccessibilityWindowInfo> wins = getWindows(); if (wins == null) return;
+        for (AccessibilityWindowInfo w : wins) {
+            if (w.getType() == AccessibilityWindowInfo.TYPE_APPLICATION) {
+                AccessibilityNodeInfo r = w.getRoot();
+                if (r != null && r.getPackageName() != null && r.getPackageName().toString().contains("whatsapp")) {
+                    AccessibilityNodeInfo edit = findEditable(r);
+                    if (edit != null) {
+                        Bundle args = new Bundle();
+                        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t);
+                        edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                        return;
+                    }
+                }
             }
         }
-    }
-
-    private void clickWhatsAppSend(AccessibilityNodeInfo root) {
-        List<AccessibilityNodeInfo> sendButtons = root.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send");
-        if (sendButtons != null && !sendButtons.isEmpty()) {
-            sendButtons.get(0).performAction(AccessibilityNodeInfo.ACTION_CLICK);
-        } else {
-            searchAndClickSend(root);
-        }
-    }
-
-    private void searchAndClickSend(AccessibilityNodeInfo node) {
-        if (node == null) return;
-        if (node.getClassName() != null && node.getClassName().toString().contains("ImageView") && node.isClickable()) {
-            if (node.getContentDescription() != null && node.getContentDescription().toString().equalsIgnoreCase("Send")) {
-                node.performAction(AccessibilityNodeInfo.ACTION_CLICK); return;
-            }
-        }
-        for (int i = 0; i < node.getChildCount(); i++) searchAndClickSend(node.getChild(i));
     }
 
     private AccessibilityNodeInfo findEditable(AccessibilityNodeInfo n) {
