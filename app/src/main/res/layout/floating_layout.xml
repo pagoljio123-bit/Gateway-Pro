@@ -1,56 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
     android:background="#00000000">
 
     <View
         android:id="@+id/dot_icon"
-        android:layout_width="40dp"
+        android:layout_width="10dp"
         android:layout_height="60dp"
-        android:layout_gravity="center_vertical|start"
-        android:background="#44FFFFFF" 
-        android:elevation="10dp" />
+        android:background="#8800ffcc"
+        android:visibility="visible" />
 
     <LinearLayout
         android:id="@+id/menu_layout"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:background="#11FFFFFF"
         android:orientation="vertical"
+        android:background="#33000000"
         android:padding="10dp"
         android:visibility="gone">
-        <Button android:id="@+id/btn_glass_scanner" android:layout_width="150dp" android:layout_height="wrap_content" android:text="Scanner" android:backgroundTint="#2200ffcc" android:textColor="#fff" />
-        <Button android:id="@+id/btn_auto_keyboard" android:layout_width="150dp" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:text="Keyboard" android:backgroundTint="#22ffcc00" android:textColor="#fff" />
-        <Button android:id="@+id/btn_hide" android:layout_width="150dp" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:text="Hide to Side" android:backgroundTint="#22ffffff" android:textColor="#fff" />
-        <Button android:id="@+id/btn_exit" android:layout_width="150dp" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:text="Close App" android:backgroundTint="#22ff3366" android:textColor="#fff" />
+        <Button android:id="@+id/btn_glass_scanner" android:layout_width="120dp" android:layout_height="40dp" android:text="Scanner" android:textSize="10sp" android:backgroundTint="#4400ffcc" />
+        <Button android:id="@+id/btn_auto_keyboard" android:layout_width="120dp" android:layout_height="40dp" android:layout_marginTop="5dp" android:text="Keyboard" android:textSize="10sp" android:backgroundTint="#44ffcc00" />
+        <Button android:id="@+id/btn_hide" android:layout_width="120dp" android:layout_height="40dp" android:layout_marginTop="5dp" android:text="Hide" android:textSize="10sp" android:backgroundTint="#44ffffff" />
+        <Button android:id="@+id/btn_exit" android:layout_width="120dp" android:layout_height="40dp" android:layout_marginTop="5dp" android:text="Close" android:textSize="10sp" android:backgroundTint="#44ff3366" />
     </LinearLayout>
 
     <RelativeLayout
         android:id="@+id/glass_scanner_layout"
-        android:layout_width="300dp"
-        android:layout_height="200dp"
-        android:layout_gravity="center"
-        android:background="#22FFFFFF"
+        android:layout_width="250dp"
+        android:layout_height="150dp"
+        android:background="#11FFFFFF"
+        android:padding="2dp"
         android:visibility="gone">
-        <TextView android:id="@+id/glass_decoded_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_alignParentBottom="true" android:background="#44000000" android:padding="5dp" android:text="Scanning..." android:textColor="#00ffcc" android:textStyle="bold" />
-        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal">
-            <Button android:id="@+id/btn_back_from_glass" android:layout_width="60dp" android:layout_height="40dp" android:text="Back" android:textSize="10sp" android:backgroundTint="#44000000" />
-            <Button android:id="@+id/btn_resize_glass" android:layout_width="60dp" android:layout_height="40dp" android:text="Resize" android:textSize="10sp" android:backgroundTint="#44000000" />
-        </LinearLayout>
+        
+        <View android:id="@+id/drag_handle" android:layout_width="match_parent" android:layout_height="20dp" android:background="#4400ffcc" />
+        
+        <TextView android:id="@+id/glass_decoded_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_alignParentBottom="true" android:background="#66000000" android:padding="5dp" android:text="Scanning..." android:textColor="#00ffcc" android:textSize="14sp" />
+        
+        <Button android:id="@+id/btn_back_glass" android:layout_width="50dp" android:layout_height="30dp" android:layout_below="@id/drag_handle" android:text="Back" android:textSize="8sp" android:backgroundTint="#66000000" />
+        <View android:id="@+id/resize_handle" android:layout_width="30dp" android:layout_height="30dp" android:layout_alignParentEnd="true" android:layout_alignParentBottom="true" android:background="#44ffffff" />
     </RelativeLayout>
 
     <LinearLayout
         android:id="@+id/keyboard_layout"
-        android:layout_width="match_parent"
+        android:layout_width="300dp"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:background="#33000000"
         android:orientation="vertical"
+        android:background="#44000000"
         android:padding="10dp"
         android:visibility="gone">
-        <Button android:id="@+id/btn_back_from_kb" android:layout_width="wrap_content" android:layout_height="40dp" android:text="Back to Menu" android:textSize="10sp" android:backgroundTint="#44000000" />
-        <EditText android:id="@+id/magic_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Type (BN/EN)..." android:textColor="#fff" android:background="#22FFFFFF" android:padding="10dp" />
+        <Button android:id="@+id/btn_back_kb" android:layout_width="wrap_content" android:layout_height="30dp" android:text="Back" android:textSize="8sp" android:backgroundTint="#66000000" />
+        <EditText android:id="@+id/magic_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Type here..." android:textColor="#fff" android:background="#22FFFFFF" android:padding="8dp" android:layout_marginTop="5dp" />
     </LinearLayout>
 </FrameLayout>
