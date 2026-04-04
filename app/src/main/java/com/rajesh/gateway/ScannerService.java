@@ -1,6 +1,7 @@
 package com.rajesh.gateway;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.AccessibilityWindowInfo;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -17,7 +18,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.view.accessibility.AccessibilityWindowInfo; // <-- এই লাইনটাই বারবার ভুল হচ্ছিল, এবার একদম ঠিক আছে
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -169,17 +169,13 @@ public class ScannerService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
+        // ম্যাজিক অটো-ক্লিয়ার: হোয়াটসঅ্যাপের সেন্ড বাটনে ক্লিক করলেই কিবোর্ড ফাঁকা হয়ে যাবে
         if (event.getEventType() == AccessibilityEvent.TYPE_VIEW_CLICKED) {
             AccessibilityNodeInfo node = event.getSource();
-            if (node != null) {
-                String viewId = node.getViewIdResourceName();
-                CharSequence desc = node.getContentDescription();
-                if ((viewId != null && viewId.equals("com.whatsapp:id/send")) || 
-                    (desc != null && desc.toString().equalsIgnoreCase("Send"))) {
-                    uiHandler.post(() -> {
-                        if (magicInput != null) magicInput.setText("");
-                    });
-                }
+            if (checkIfWhatsAppSendButton(node)) {
+                uiHandler.post(() -> {
+                    if (magicInput != null) magicInput.setText(""); // লেখা ক্লিয়ার করে দেবে
+                });
             }
         }
 
@@ -195,6 +191,29 @@ public class ScannerService extends AccessibilityService {
         if (!isLensActive) return;
         uiHandler.removeCallbacks(scanRunnable);
         uiHandler.postDelayed(scanRunnable, 300); 
+    }
+
+    // হোয়াটসঅ্যাপের সেন্ড বাটন নিখুঁতভাবে চেনার স্পেশাল লজিক (বাংলা/ইংরেজি সব সাপোর্ট করবে)
+    private boolean checkIfWhatsAppSendButton(AccessibilityNodeInfo node) {
+        if (node == null) return false;
+        
+        String viewId = node.getViewIdResourceName();
+        CharSequence desc = node.getContentDescription();
+        
+        if (viewId != null && viewId.toLowerCase().endsWith("id/send")) return true;
+        if (desc != null && (desc.toString().toLowerCase().contains("send") || desc.toString().contains("পাঠান"))) return true;
+        
+        // অনেক সময় বাটনের পেছনের বক্সে ক্লিক পড়ে যায়, তাই চাইল্ডগুলোও চেক করা হলো
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                String cViewId = child.getViewIdResourceName();
+                CharSequence cDesc = child.getContentDescription();
+                if (cViewId != null && cViewId.toLowerCase().endsWith("id/send")) return true;
+                if (cDesc != null && (cDesc.toString().toLowerCase().contains("send") || cDesc.toString().contains("পাঠান"))) return true;
+            }
+        }
+        return false;
     }
 
     private void injectOnly(String t) {
