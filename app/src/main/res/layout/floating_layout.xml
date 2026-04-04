@@ -3,13 +3,14 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:orientation="vertical"
+    android:id="@+id/root_control_layout"
     android:gravity="start">
 
     <View
         android:id="@+id/stealth_bar"
-        android:layout_width="5dp"
+        android:layout_width="6dp"
         android:layout_height="50dp"
-        android:background="#11FFFFFF" 
+        android:background="#15FFFFFF" 
         android:elevation="1dp" />
 
     <LinearLayout
@@ -17,25 +18,29 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#05000000" 
+        android:background="#08000000" 
         android:padding="8dp"
         android:visibility="gone">
-        <Button android:id="@+id/btn_lens_on" android:layout_width="130dp" android:layout_height="38dp" android:text="Start Lens" android:textSize="10sp" android:backgroundTint="#6600ffcc" android:textColor="#000" />
-        <Button android:id="@+id/btn_lens_off" android:layout_width="130dp" android:layout_height="38dp" android:text="Stop Lens" android:textSize="10sp" android:backgroundTint="#66555555" android:textColor="#fff" android:visibility="gone" />
-        <Button android:id="@+id/btn_keyboard" android:layout_width="130dp" android:layout_height="38dp" android:layout_marginTop="4dp" android:text="Keyboard" android:textSize="10sp" android:backgroundTint="#66ffcc00" android:textColor="#000" />
-        <Button android:id="@+id/btn_full_hide" android:layout_width="130dp" android:layout_height="38dp" android:layout_marginTop="4dp" android:text="Go Invisible" android:textSize="10sp" android:backgroundTint="#66ffffff" android:textColor="#000" />
+        <Button android:id="@+id/btn_lens_on" android:layout_width="130dp" android:layout_height="38dp" android:text="Start Lens" android:textSize="10sp" android:backgroundTint="#5500ffcc" android:textColor="#000" />
+        <Button android:id="@+id/btn_lens_off" android:layout_width="130dp" android:layout_height="38dp" android:text="Stop Lens" android:textSize="10sp" android:backgroundTint="#55555555" android:textColor="#fff" android:visibility="gone" />
+        <Button android:id="@+id/btn_keyboard" android:layout_width="130dp" android:layout_height="38dp" android:layout_marginTop="4dp" android:text="Keyboard" android:textSize="10sp" android:backgroundTint="#55ffcc00" android:textColor="#000" />
+        <Button android:id="@+id/btn_back_to_bar" android:layout_width="130dp" android:layout_height="38dp" android:layout_marginTop="4dp" android:text="Return to Bar" android:textSize="10sp" android:backgroundTint="#44ffffff" android:textColor="#000" />
         <Button android:id="@+id/btn_exit" android:layout_width="130dp" android:layout_height="38dp" android:layout_marginTop="4dp" android:text="Exit System" android:textSize="10sp" android:backgroundTint="#66ff3366" android:textColor="#fff" />
     </LinearLayout>
 
     <LinearLayout
         android:id="@+id/keyboard_layout"
-        android:layout_width="300dp"
+        android:layout_width="320dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="#15000000"
         android:padding="12dp"
         android:visibility="gone">
-        <Button android:id="@+id/btn_close_kb" android:layout_width="wrap_content" android:layout_height="32dp" android:text="Close" android:textSize="9sp" android:backgroundTint="#88ff3366" />
-        <EditText android:id="@+id/magic_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:hint="Type..." android:textColor="#00ffcc" android:background="#22ffffff" android:padding="10dp" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/btn_close_kb" android:layout_width="wrap_content" android:layout_height="32dp" android:text="Back" android:textSize="9sp" android:backgroundTint="#88555555" />
+            <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+            <Button android:id="@+id/btn_send_clear" android:layout_width="wrap_content" android:layout_height="32dp" android:text="SEND &amp; CLEAR" android:textSize="9sp" android:backgroundTint="#8800ffcc" android:textColor="#000" android:textStyle="bold" />
+        </LinearLayout>
+        <EditText android:id="@+id/magic_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:hint="Type here..." android:textColor="#00ffcc" android:background="#22ffffff" android:padding="12dp" />
     </LinearLayout>
 </LinearLayout>
