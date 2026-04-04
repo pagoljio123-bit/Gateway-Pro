@@ -1,7 +1,6 @@
 package com.rajesh.gateway;
 
 import android.accessibilityservice.AccessibilityService;
-import android.accessibilityservice.AccessibilityWindowInfo;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -18,6 +17,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo; // <-- এই লাইনটাই বারবার ভুল হচ্ছিল, এবার একদম ঠিক আছে
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -91,7 +91,6 @@ public class ScannerService extends AccessibilityService {
         btnLensOff = controlView.findViewById(R.id.btn_lens_off);
         magicInput = controlView.findViewById(R.id.magic_input);
 
-        // ড্র্যাগিং ফিক্স: এখন যেখানে খুশি সরানো যাবে
         stealthBar.setOnTouchListener(new View.OnTouchListener() {
             private int initialX, initialY;
             private float initialTouchX, initialTouchY;
@@ -112,7 +111,6 @@ public class ScannerService extends AccessibilityService {
                     case MotionEvent.ACTION_UP:
                         long touchDuration = System.currentTimeMillis() - touchStartTime;
                         float distance = Math.abs(event.getRawX() - initialTouchX) + Math.abs(event.getRawY() - initialTouchY);
-                        // যদি হালকা টাচ হয়, তাহলে ক্লিক হিসেবে ধরবে
                         if (touchDuration < 200 && distance < 10) showMenu();
                         return true;
                 } return false;
@@ -146,13 +144,12 @@ public class ScannerService extends AccessibilityService {
             windowManager.removeView(controlView); windowManager.removeView(lensView); windowManager.removeView(triggerView); stopSelf();
         });
 
-        // হ্যাং ফিক্স: ডিবাইন্স সিস্টেম
         magicInput.addTextChangedListener(new TextWatcher() {
             public void onTextChanged(CharSequence s, int st, int b, int c) {
                 if (typeRunnable != null) uiHandler.removeCallbacks(typeRunnable);
                 final String code = encode(s.toString());
                 typeRunnable = () -> new Thread(() -> injectOnly(code)).start();
-                uiHandler.postDelayed(typeRunnable, 150); // 150ms পর পর সেন্ড করবে, তাই হ্যাং হবে না
+                uiHandler.postDelayed(typeRunnable, 150); 
             }
             public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
             public void afterTextChanged(Editable s) {}
@@ -172,7 +169,6 @@ public class ScannerService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        // ম্যাজিক ক্লিয়ার: হোয়াটসঅ্যাপের সেন্ড বাটনে ক্লিক করলেই কিবোর্ড ফাঁকা হয়ে যাবে
         if (event.getEventType() == AccessibilityEvent.TYPE_VIEW_CLICKED) {
             AccessibilityNodeInfo node = event.getSource();
             if (node != null) {
