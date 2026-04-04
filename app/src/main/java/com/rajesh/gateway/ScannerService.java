@@ -1,7 +1,6 @@
 package com.rajesh.gateway;
 
 import android.accessibilityservice.AccessibilityService;
-import android.accessibilityservice.AccessibilityWindowInfo;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -18,7 +17,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.view.accessibility.AccessibilityWindowInfo;
+import android.view.accessibility.AccessibilityWindowInfo; // একদম সঠিক ঠিকানা
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -67,7 +66,7 @@ public class ScannerService extends AccessibilityService {
         // ২. অদৃশ্য ট্রিগার বিন্দু (ডাবল ট্যাপের জন্য)
         triggerView = new View(this);
         triggerParams = new WindowManager.LayoutParams(
-                50, 50, // মাত্র ৫০ পিক্সেল সাইজ
+                50, 50,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
@@ -127,6 +126,7 @@ public class ScannerService extends AccessibilityService {
             return true;
         });
 
+        // এখানে btn_full_hide ঠিক করা হয়েছে
         controlView.findViewById(R.id.btn_full_hide).setOnClickListener(v -> {
             menuLayout.setVisibility(View.GONE);
             stealthBar.setVisibility(View.GONE); // পুরোপুরি অদৃশ্য
@@ -146,7 +146,7 @@ public class ScannerService extends AccessibilityService {
 
         controlView.findViewById(R.id.btn_lens_off).setOnClickListener(v -> stopLens());
         controlView.findViewById(R.id.btn_close_kb).setOnClickListener(v -> closeKeyboard());
-        controlView.findViewById(R.id.btn_hide).setOnClickListener(v -> hideToBar());
+        
         controlView.findViewById(R.id.btn_exit).setOnClickListener(v -> {
             windowManager.removeView(controlView); windowManager.removeView(lensView); windowManager.removeView(triggerView); stopSelf();
         });
@@ -164,11 +164,6 @@ public class ScannerService extends AccessibilityService {
     private void showMenu() {
         stealthBar.setVisibility(View.GONE);
         menuLayout.setVisibility(View.VISIBLE);
-    }
-
-    private void hideToBar() {
-        menuLayout.setVisibility(View.GONE);
-        stealthBar.setVisibility(View.VISIBLE);
     }
 
     private void stopLens() { isLensActive = false; lensView.removeAllViews(); btnLensOff.setVisibility(View.GONE); btnLensOn.setVisibility(View.VISIBLE); }
