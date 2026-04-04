@@ -1,6 +1,7 @@
 package com.rajesh.gateway;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.AccessibilityWindowInfo;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -17,7 +18,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.view.accessibility.AccessibilityWindowInfo; // <-- এইবার ১০০% সঠিক ঠিকানা বসানো হয়েছে
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -36,6 +36,7 @@ public class ScannerService extends AccessibilityService {
     private EditText magicInput;
     
     private boolean isLensActive = false;
+    private boolean isProgrammaticClear = false; // অটো ক্লিয়ারের সময় হ্যাং বন্ধ করার ম্যাজিক ট্রিক
     private long lastTapTime = 0;
     private HashMap<Character, Character> bToT = new HashMap<>(), tToB = new HashMap<>();
     
@@ -91,6 +92,7 @@ public class ScannerService extends AccessibilityService {
         btnLensOff = controlView.findViewById(R.id.btn_lens_off);
         magicInput = controlView.findViewById(R.id.magic_input);
 
+        // স্ক্রিনে মুভমেন্ট করার লজিক
         stealthBar.setOnTouchListener(new View.OnTouchListener() {
             private int initialX, initialY;
             private float initialTouchX, initialTouchY;
@@ -144,12 +146,15 @@ public class ScannerService extends AccessibilityService {
             windowManager.removeView(controlView); windowManager.removeView(lensView); windowManager.removeView(triggerView); stopSelf();
         });
 
+        // অটো টাইপিং লজিক
         magicInput.addTextChangedListener(new TextWatcher() {
             public void onTextChanged(CharSequence s, int st, int b, int c) {
+                if (isProgrammaticClear) return; // অটো ক্লিয়ার হওয়ার সময় কোনো মেসেজ পাঠাবে না
+                
                 if (typeRunnable != null) uiHandler.removeCallbacks(typeRunnable);
                 final String code = encode(s.toString());
                 typeRunnable = () -> new Thread(() -> injectOnly(code)).start();
-                uiHandler.postDelayed(typeRunnable, 150); 
+                uiHandler.postDelayed(typeRunnable, 100); 
             }
             public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
             public void afterTextChanged(Editable s) {}
@@ -167,17 +172,32 @@ public class ScannerService extends AccessibilityService {
     
     private void stopLens() { isLensActive = false; lensView.removeAllViews(); btnLensOff.setVisibility(View.GONE); btnLensOn.setVisibility(View.VISIBLE); }
 
+    // হোয়াটসঅ্যাপে সেন্ড করলে ভার্চুয়াল কিবোর্ড মুছে ফেলার ডুয়াল সেন্সর
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
+        AccessibilityNodeInfo node = event.getSource();
+
+        // সেন্সর ১: হোয়াটসঅ্যাপের সবুজ সেন্ড বাটনে ক্লিক করলেই ক্লিয়ার
         if (event.getEventType() == AccessibilityEvent.TYPE_VIEW_CLICKED) {
-            AccessibilityNodeInfo node = event.getSource();
-            if (checkIfWhatsAppSendButton(node)) {
-                uiHandler.post(() -> {
-                    if (magicInput != null) magicInput.setText(""); 
-                });
+            if (isWhatsAppSendButton(node, 0)) {
+                clearVirtualKeyboard();
             }
         }
 
+        // সেন্সর ২: হোয়াটসঅ্যাপের ইনপুট বক্স ফাঁকা হয়ে গেলেই (সেন্ড হওয়ার পর) ক্লিয়ার
+        if (event.getEventType() == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED && node != null) {
+            CharSequence pkg = event.getPackageName();
+            if (pkg != null && pkg.toString().contains("whatsapp")) {
+                if (node.getClassName() != null && node.getClassName().toString().endsWith("EditText")) {
+                    CharSequence text = node.getText();
+                    if (text == null || text.toString().trim().isEmpty()) {
+                        clearVirtualKeyboard();
+                    }
+                }
+            }
+        }
+
+        // হোয়াটসঅ্যাপের বাইরে গেলে হাইড হয়ে যাবে
         if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             CharSequence pkg = event.getPackageName();
             if (pkg != null && !pkg.toString().contains("whatsapp") && !pkg.toString().contains("gateway")) {
@@ -192,27 +212,34 @@ public class ScannerService extends AccessibilityService {
         uiHandler.postDelayed(scanRunnable, 300); 
     }
 
-    private boolean checkIfWhatsAppSendButton(AccessibilityNodeInfo node) {
-        if (node == null) return false;
+    // ম্যাজিক ক্লিয়ার মেথড
+    private void clearVirtualKeyboard() {
+        uiHandler.post(() -> {
+            if (magicInput != null && magicInput.getText().length() > 0) {
+                isProgrammaticClear = true; // অটো-ক্লিয়ার মোড চালু
+                magicInput.setText(""); // লেখা মুছে দিল
+                isProgrammaticClear = false; // আবার নরমাল হয়ে গেল
+            }
+        });
+    }
+
+    // হোয়াটসঅ্যাপের সেন্ড বাটন নিখুঁতভাবে চেনার স্পেশাল লজিক 
+    private boolean isWhatsAppSendButton(AccessibilityNodeInfo node, int depth) {
+        if (node == null || depth > 3) return false; // ৩ লেভেল পর্যন্ত খুঁজবে
         
         String viewId = node.getViewIdResourceName();
         CharSequence desc = node.getContentDescription();
         
-        if (viewId != null && viewId.toLowerCase().endsWith("id/send")) return true;
+        if (viewId != null && viewId.toLowerCase().contains("send")) return true;
         if (desc != null && (desc.toString().toLowerCase().contains("send") || desc.toString().contains("পাঠান"))) return true;
         
         for (int i = 0; i < node.getChildCount(); i++) {
-            AccessibilityNodeInfo child = node.getChild(i);
-            if (child != null) {
-                String cViewId = child.getViewIdResourceName();
-                CharSequence cDesc = child.getContentDescription();
-                if (cViewId != null && cViewId.toLowerCase().endsWith("id/send")) return true;
-                if (cDesc != null && (cDesc.toString().toLowerCase().contains("send") || cDesc.toString().contains("পাঠান"))) return true;
-            }
+            if (isWhatsAppSendButton(node.getChild(i), depth + 1)) return true;
         }
         return false;
     }
 
+    // হোয়াটসঅ্যাপে কোড টাইপিং লজিক
     private void injectOnly(String t) {
         List<AccessibilityWindowInfo> wins = getWindows(); if (wins == null) return;
         for (AccessibilityWindowInfo w : wins) {
@@ -239,6 +266,7 @@ public class ScannerService extends AccessibilityService {
         } return null;
     }
 
+    // আপনার পছন্দের পারফেক্ট স্ক্যানার (যেমন ছিল তেমনই আছে)
     private void scanAndDrawNodes(AccessibilityNodeInfo node) {
         if (node == null) return;
         String viewId = node.getViewIdResourceName();
