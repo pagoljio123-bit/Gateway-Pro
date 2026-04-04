@@ -18,15 +18,14 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#DD000000"
+        android:background="#11000000" 
         android:padding="10dp"
         android:visibility="gone">
-        
-        <Button android:id="@+id/btn_lens_on" android:layout_width="140dp" android:layout_height="40dp" android:text="Start Lens" android:textColor="#000" android:backgroundTint="#00ffcc" />
-        <Button android:id="@+id/btn_lens_off" android:layout_width="140dp" android:layout_height="40dp" android:layout_marginTop="5dp" android:text="Stop Lens" android:textColor="#fff" android:backgroundTint="#555555" android:visibility="gone" />
-        <Button android:id="@+id/btn_keyboard" android:layout_width="140dp" android:layout_height="40dp" android:layout_marginTop="5dp" android:text="Keyboard" android:textColor="#000" android:backgroundTint="#ffcc00" />
-        <Button android:id="@+id/btn_hide" android:layout_width="140dp" android:layout_height="40dp" android:layout_marginTop="5dp" android:text="Hide Menu" android:textColor="#fff" android:backgroundTint="#333333" />
-        <Button android:id="@+id/btn_exit" android:layout_width="140dp" android:layout_height="40dp" android:layout_marginTop="5dp" android:text="EMERGENCY EXIT" android:textColor="#fff" android:backgroundTint="#ff0000" android:textStyle="bold" />
+        <Button android:id="@+id/btn_lens_on" android:layout_width="140dp" android:layout_height="40dp" android:text="Start Lens" android:textColor="#000" android:backgroundTint="#8800ffcc" />
+        <Button android:id="@+id/btn_lens_off" android:layout_width="140dp" android:layout_height="40dp" android:text="Stop Lens" android:textColor="#fff" android:backgroundTint="#88555555" android:visibility="gone" />
+        <Button android:id="@+id/btn_keyboard" android:layout_width="140dp" android:layout_height="40dp" android:layout_marginTop="5dp" android:text="Keyboard" android:textColor="#000" android:backgroundTint="#88ffcc00" />
+        <Button android:id="@+id/btn_hide" android:layout_width="140dp" android:layout_height="40dp" android:layout_marginTop="5dp" android:text="Hide Menu" android:textColor="#fff" android:backgroundTint="#88333333" />
+        <Button android:id="@+id/btn_exit" android:layout_width="140dp" android:layout_height="40dp" android:layout_marginTop="5dp" android:text="EMERGENCY EXIT" android:textColor="#fff" android:backgroundTint="#88ff0000" android:textStyle="bold" />
     </LinearLayout>
 
     <LinearLayout
@@ -34,10 +33,10 @@
         android:layout_width="320dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#EE000000"
+        android:background="#22000000"
         android:padding="15dp"
         android:visibility="gone">
-        <Button android:id="@+id/btn_close_kb" android:layout_width="wrap_content" android:layout_height="35dp" android:text="Close Keyboard" android:textColor="#fff" android:backgroundTint="#ff3366" />
-        <EditText android:id="@+id/magic_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:hint="Type here (Auto Code)..." android:textColorHint="#888" android:textColor="#00ffcc" android:background="#22ffffff" android:padding="12dp" />
+        <Button android:id="@+id/btn_close_kb" android:layout_width="wrap_content" android:layout_height="35dp" android:text="Close Keyboard" android:textColor="#fff" android:backgroundTint="#AAff3366" />
+        <EditText android:id="@+id/magic_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:hint="Type here..." android:textColorHint="#888" android:textColor="#00ffcc" android:background="#44ffffff" android:padding="12dp" />
     </LinearLayout>
 </LinearLayout>
